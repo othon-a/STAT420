@@ -4,6 +4,7 @@ library(MASS)
 library(faraway)
 library(ppcor)
 library(tidyverse)
+library(glmnet)
 
 diagnostic_plots = function(model) {
   
@@ -190,15 +191,50 @@ plot(yield_hg_ha ~ temp_c ,data = df_potatoes)
 x2=(df_potatoes$temp_c)^2
 plot(yield_hg_ha^0.5 ~ x2, data = df_potatoes)
 
-
+# best model so far without interaction and with subregion
 y_x_trans_model_potato = lm(yield_hg_ha^0.6 ~ year + rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier +subregion , data = df_potatoes)
 summary(y_x_trans_model_potato)
 
 diagnostic_plots(y_x_trans_model_potato)
 diagnostic_tests(y_x_trans_model_potato)
 
+y_x_trans_model_potato_back_bic = step(y_x_trans_model_potato, direction = "backward", k=log(length(resid(y_x_trans_model_potato))))
+# lol the original is already the best.
+
+# best model so far without interaction and without subregion
+
+y_x_trans_model_potato_no_re = lm(yield_hg_ha^0.5 ~ year + rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier , data = df_potatoes)
+summary(y_x_trans_model_potato_no_re)
+
+diagnostic_plots(y_x_trans_model_potato_no_re)
+diagnostic_tests(y_x_trans_model_potato_no_re)
+
+y_x_trans_model_potato_no_re_back_bic = step(y_x_trans_model_potato_no_re, direction = "backward", k=log(length(resid(y_x_trans_model_potato_no_re))))
+#rain is removed
+
+#-----------------------------------
+#adding interaction then use lasso to filter
+
+#removed year compare to original
+int_y_x_trans_model_potato = lm(yield_hg_ha^0.6 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion , data = df_potatoes)
+
+int_y_x_trans_model_potato_back_bic = step(int_y_x_trans_model_potato, direction = "backward", k=log(length(resid(int_y_x_trans_model_potato))))
+summary(int_y_x_trans_model_potato_back_bic)
+
+diagnostic_plots(int_y_x_trans_model_potato_back_bic)
+diagnostic_tests(int_y_x_trans_model_potato_back_bic)
+#remove year because it inflated with log^2 pesticide term
 
 
+int_y_x_trans_model_potato_nore = lm(yield_hg_ha^0.5 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 , data = df_potatoes)
+
+int_y_x_trans_model_potato_nore_back_bic = step(int_y_x_trans_model_potato_nore, direction = "backward", k=log(length(resid(int_y_x_trans_model_potato_nore))))
+summary(int_y_x_trans_model_potato_nore_back_bic)
+
+diagnostic_plots(int_y_x_trans_model_potato_nore_back_bic)
+diagnostic_tests(int_y_x_trans_model_potato_nore_back_bic)
+
+#adding lasso to prioritize the explanatory predictors
 
 
 gdp_int = lm(yield_hg_ha ~ year + rain_mm + pesticides_t + temp_c + gdp_tier + gdp_tier:year + gdp_tier:rain_mm + gdp_tier:pesticides_t + gdp_tier:temp_c, data = df_potatoes)
