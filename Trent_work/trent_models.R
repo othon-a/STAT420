@@ -135,6 +135,7 @@ df_potatoes = subset(df, crop == "Potatoes")
 df_potatoes = df_potatoes %>%
   select(-country, -crop)
 
+#---------------------initial inspection --------------------
 #had to convert categorical to numeric to use pairs and cor
 df_potatoes_num = df_potatoes%>%        
   mutate(
@@ -147,6 +148,7 @@ round(cor(df_potatoes_num), 2)
 # did not see any obvious high covariance and linearity between predictors
 
 
+#---------------------- full model inspection---------------------------
 #fit a full model first
 full_model = lm(yield_hg_ha ~ . , data = df_potatoes)
 summary(full_model)
@@ -164,10 +166,8 @@ diagnostic_tests(full_model_nore)
 #summary: the boxcox strongly suggest taking 
 
 
+#--------------------Transformation-----------------------------------
 
-#-------------------------------------------------------
-
-#Transformation
 y_trans_full_model = lm(yield_hg_ha^0.6 ~ . , data = df_potatoes)
 summary(y_trans_full_model)
 
@@ -180,16 +180,23 @@ summary(y_trans_full_model_nore)
 diagnostic_plots(y_trans_full_model_nore)
 diagnostic_tests(y_trans_full_model_nore)
 
-par(mfrow = c(1, 1))
-plot(yield_hg_ha ~ pesticides_t ,data = df_potatoes)
 
-x=(log(df_potatoes$pesticides_t))^2
-plot(yield_hg_ha^0.5 ~ x, data = df_potatoes)
+#compare the transformed predictor and response vs non transformed
+par(mfrow = c(2, 2))
 
-plot(yield_hg_ha ~ temp_c ,data = df_potatoes)
+plot(df_potatoes$pesticides_t, df_potatoes$yield_hg_ha, xlab = "pesticides_t", ylab = "yield_hg_ha",  main = "Raw: yield vs pesticides")
 
-x2=(df_potatoes$temp_c)^2
-plot(yield_hg_ha^0.5 ~ x2, data = df_potatoes)
+x_pest = (log(df_potatoes$pesticides_t))^2
+y_trans = df_potatoes$yield_hg_ha^0.5
+
+plot(  x_pest,  y_trans,  xlab = "(log(pesticides_t))^2",  ylab = "sqrt(yield_hg_ha)",  main = "Transformed: sqrt(yield) vs (log(pest))^2")
+
+plot(df_potatoes$temp_c, df_potatoes$yield_hg_ha, xlab = "temp_c", ylab = "yield_hg_ha", main = "Raw: yield vs temp_c")
+
+x_temp = (df_potatoes$temp_c)^2
+
+plot(x_temp, y_trans, xlab = "temp_c^2", ylab = "sqrt(yield_hg_ha)", main = "Transformed: sqrt(yield) vs temp_c^2")
+#looks more linear now after transformation
 
 # best model so far without interaction and with subregion
 y_x_trans_model_potato = lm(yield_hg_ha^0.6 ~ year + rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier +subregion , data = df_potatoes)
@@ -212,8 +219,8 @@ diagnostic_tests(y_x_trans_model_potato_no_re)
 y_x_trans_model_potato_no_re_back_bic = step(y_x_trans_model_potato_no_re, direction = "backward", k=log(length(resid(y_x_trans_model_potato_no_re))))
 #rain is removed
 
-#-----------------------------------
-#adding interaction then use lasso to filter
+#---------------------Testing interaction--------------
+#
 
 #removed year compare to original
 int_y_x_trans_model_potato = lm(yield_hg_ha^0.6 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion , data = df_potatoes)
@@ -225,7 +232,37 @@ diagnostic_plots(int_y_x_trans_model_potato_back_bic)
 diagnostic_tests(int_y_x_trans_model_potato_back_bic)
 #remove year because it inflated with log^2 pesticide term
 
+# Actual vs Predicted (transformed scale)
+y_actual = df_potatoes$yield_hg_ha^0.6
+y_pred = predict(int_y_x_trans_model_potato_back_bic)
 
+par(mfrow = c(1, 1))
+plot(
+  y_actual, y_pred,
+  xlab = "Actual (yield_hg_ha^0.6)",
+  ylab = "Predicted (yield_hg_ha^0.6)",
+  main = "Actual vs Predicted (Transformed Scale)",
+  pch = 19, col = "blue"
+)
+abline(0, 1, col = "red", lwd = 2)
+
+# Actual vs Predicted (original yield scale)
+y_actual_orig = df_potatoes$yield_hg_ha
+y_pred_trans = predict(int_y_x_trans_model_potato_back_bic)
+y_pred_orig = y_pred_trans^(1/0.6)
+
+par(mfrow = c(1, 1))
+plot(
+  y_actual_orig, y_pred_orig,
+  xlab = "Actual yield_hg_ha",
+  ylab = "Predicted yield_hg_ha",
+  main = "Actual vs Predicted (Original Yield Scale)",
+  pch = 19, col = "darkgreen"
+)
+abline(0, 1, col = "red", lwd = 2)
+
+
+# Interactive model without region
 int_y_x_trans_model_potato_nore = lm(yield_hg_ha^0.5 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 , data = df_potatoes)
 
 int_y_x_trans_model_potato_nore_back_bic = step(int_y_x_trans_model_potato_nore, direction = "backward", k=log(length(resid(int_y_x_trans_model_potato_nore))))
@@ -234,16 +271,154 @@ summary(int_y_x_trans_model_potato_nore_back_bic)
 diagnostic_plots(int_y_x_trans_model_potato_nore_back_bic)
 diagnostic_tests(int_y_x_trans_model_potato_nore_back_bic)
 
-#adding lasso to prioritize the explanatory predictors
+
+# Actual vs predicted on transformed scale (sqrt(y))
+y_actual = df_potatoes$yield_hg_ha^0.5
+y_pred = predict(int_y_x_trans_model_potato_nore_back_bic)
+
+par(mfrow = c(1, 1))
+plot(  y_actual, y_pred,  xlab = "Actual (yield_hg_ha^0.5)",  ylab = "Predicted (yield_hg_ha^0.5)",  main = "Actual vs Predicted (Transformed Scale: sqrt(yield))",  pch = 19, col = "blue")
+abline(0, 1, col = "red", lwd = 2)
+
+# Convert predicted values back to original scale
+y_actual_orig = df_potatoes$yield_hg_ha
+y_pred_trans = predict(int_y_x_trans_model_potato_nore_back_bic)
+y_pred_orig = (y_pred_trans)^2     # because inverse of sqrt(y) is (sqrt(y))^2
+
+par(mfrow = c(1, 1))
+plot(  y_actual_orig, y_pred_orig,  xlab = "Actual yield_hg_ha",  ylab = "Predicted yield_hg_ha",  main = "Actual vs Predicted (Original Yield Scale)",  pch = 19, col = "darkgreen")
+abline(0, 1, col = "red", lwd = 2)
 
 
-gdp_int = lm(yield_hg_ha ~ year + rain_mm + pesticides_t + temp_c + gdp_tier + gdp_tier:year + gdp_tier:rain_mm + gdp_tier:pesticides_t + gdp_tier:temp_c, data = df_potatoes)
-summary(gdp_int)
+#---------lasso regression to prioritize the explanatory predictors---------
 
-lin_int = lm(yield_hg_ha ~ year * rain_mm * pesticides_t * temp_c * gdp_tier, data = df_potatoes)
-summary(lin_int)
+# ============================
+# LASSO with region variables
+# ============================
 
-pot_model_add = lm(yield_hg_ha ~ year + rain_mm + pesticides_t + temp_c + gdp_tier, data = df_potatoes)
-summary(pot_model_add )
+y_lasso = (df_potatoes$yield_hg_ha)^0.6
+x_lasso = model.matrix((yield_hg_ha)^0.6 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion, data = df_potatoes)[, -1]
 
- 
+x_lasso_scaled = scale(x_lasso)
+
+set.seed(420)
+lasso_fit = glmnet(  x = x_lasso_scaled,
+                     y = y_lasso,
+                     family = "gaussian",
+                     standardize = FALSE,
+                     alpha = 1      # LASSO
+                     )
+
+plot(lasso_fit,label = TRUE)
+
+coef_paths = coef(lasso_fit)
+coef_df = as.data.frame(as.matrix(coef_paths))
+coef_df$predictor = rownames(coef_df)
+coef_df = coef_df %>% select(predictor, everything())
+
+cv_fit = cv.glmnet(
+  x = x_lasso_scaled,
+  y = y_lasso,
+  family = "gaussian",
+  alpha = 1,      # LASSO
+  standardize = FALSE 
+)
+plot(cv_fit)
+
+coef_min = coef(cv_fit, s = "lambda.min")
+coef_min
+
+coef_1se = coef(cv_fit, s = "lambda.1se")
+coef_1se
+
+rank_lasso_importance = function(cv_fit, s = "lambda.min") {
+  coefs = coef(cv_fit, s = s)
+  df = data.frame(
+    predictor = rownames(coefs),
+    coefficient = as.numeric(coefs)
+  )
+  df = df %>%
+    filter(predictor != "(Intercept)") %>% 
+    mutate(abs_coef = abs(coefficient)) %>%
+    arrange(desc(abs_coef))
+  
+  return(df)
+}
+
+importance = rank_lasso_importance(cv_fit, s = "lambda.1se")
+importance
+
+
+
+# ============================
+# LASSO without region variables
+# ============================
+
+
+y_lasso_nore = (df_potatoes$yield_hg_ha)^0.5
+
+
+x_lasso_nore = model.matrix(
+  (yield_hg_ha)^0.5 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2,
+  data = df_potatoes
+)[, -1]   # remove intercept column
+
+x_lasso_scaled_nore = scale(x_lasso_nore)
+
+set.seed(420)
+lasso_fit_nore = glmnet(
+  x = x_lasso_scaled_nore,
+  y = y_lasso_nore,
+  family = "gaussian",
+  standardize = FALSE,
+  alpha = 1     # LASSO
+)
+
+plot(lasso_fit_nore, label = TRUE)
+
+
+coef_paths_nore = coef(lasso_fit_nore)
+coef_df_nore = as.data.frame(as.matrix(coef_paths_nore))
+coef_df_nore$predictor = rownames(coef_df_nore)
+coef_df_nore = coef_df_nore %>% select(predictor, everything())
+View(coef_df_nore)
+
+
+set.seed(420)
+cv_fit_nore = cv.glmnet(
+  x = x_lasso_scaled_nore,
+  y = y_lasso_nore,
+  family = "gaussian",
+  standardize = FALSE,
+  alpha = 1
+)
+
+
+plot(cv_fit_nore)
+
+
+coef_min_nore = coef(cv_fit_nore, s = "lambda.min")
+coef_min_nore
+
+coef_1se_nore = coef(cv_fit_nore, s = "lambda.1se")
+coef_1se_nore
+
+
+rank_lasso_importance = function(cv_fit, s = "lambda.min") {
+  coefs = coef(cv_fit, s = s)
+  df = data.frame(
+    predictor = rownames(coefs),
+    coefficient = as.numeric(coefs)
+  )
+  df = df %>%
+    filter(predictor != "(Intercept)") %>% 
+    mutate(abs_coef = abs(coefficient)) %>%
+    arrange(desc(abs_coef))
+  
+  return(df)
+}
+
+
+importance_nore = rank_lasso_importance(cv_fit_nore, s = "lambda.1se")
+importance_nore
+
