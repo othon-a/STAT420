@@ -3,4 +3,142 @@ title: "CropYield"
 output: html_document
 ---
 
-Test
+
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+suppressPackageStartupMessages({
+library(readr)
+library(lmtest)
+library(MASS)
+library(faraway)
+library(tidyverse)
+library(glmnet)
+})
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+diagnostic_plots = function(model) {
+  
+  # 2x2 layout
+  par(mfrow = c(2, 2))
+  
+  fit = fitted(model)
+  res = residuals(model)
+  
+  plot(fit, res,
+       xlab = "Fitted values",
+       ylab = "Residuals",
+       main = "Fitted vs Residuals")
+  abline(h = 0, lty = 2, col = "red")
+  
+  hist(res,
+       breaks = 15,
+       main = "Histogram of Residuals",
+       xlab = "Residuals")
+  
+  qqnorm(res,
+         main = "Normal Q-Q Plot")
+  qqline(res, col = "red")
+  
+  b = boxcox(
+    model,
+    lambda = seq(-2, 2, 0.1),
+    plotit = TRUE
+  )
+  
+}
+
+diagnostic_tests = function(model) {
+  
+  # Basic quantities
+  res = residuals(model)
+  n = length(res)
+  p = length(coef(model))  
+  
+  bp = bptest(model)
+  
+  shapiro = shapiro.test(res)
+  
+  vif_values = car::vif(model)
+  cat("=== Breusch-Pagan Test (Homoscedasticity) ===\n")
+  print(bp)
+  cat("\nInterpretation: p-value < 0.05 suggests heteroscedasticity.\n\n")
+  
+  cat("=== Shapiro-Wilk Test (Normality of Residuals) ===\n")
+  print(shapiro)
+  cat("\nInterpretation: p-value < 0.05 suggests non-normal residuals.\n\n")
+  
+  cat("=== Variance Inflation Factor (VIF) ===\n")
+  print(vif_values)
+  cat("\nInterpretation: VIF > 5 suggests moderate collinearity; VIF > 10 suggests high multicollinearity.\n\n")
+  
+  return(list(
+    bp_test = bp,
+    shapiro_test = shapiro,
+    vif = vif_values,
+    thresholds = list(
+      vif = 5
+    )
+  ))
+}
+```
+
+## Introduction
+
+
+
+## Methods
+
+### Data Cleaning # added your jouney as well
+
+Removed index to find duplicates
+Averaged the temperature
+Remove NA ,No NA in the data set
+renamed the predictors for easy coding
+
+Transform countries to new cat predictors:
+  Using world bank data https://data.worldbank.org/indicator/NY.GDP.PCAP.CD to allocate GPD tiers to coutries using 2002 center year GPD data,
+    addressed name mismatch issues.
+  divide coutries into subregions
+
+Different crops are affected differently by these predictor, we decided ton focus on the one has most data Potato
+
+### Exploratory Data Analysis # added your jouney as well
+
+Pair exploring data trends
+
+Cov to see data covariance
+
+
+Full linear model (r^2 adj 0.701)
+
+Explain Full model
+
+Full model vs Full model - subregions anova shows subregions significant
+
+Predictor and Response Transformation before and after R^2 adj gain  0.7288 
+    Response ~ solo predictor
+    Boxcox : response is likely a complex combination of different 
+
+Full model with transformation - using backwards selection, no reduction
+
+Testing interaction further 
+
+  reduction with BIC backwards R^2 adj gain 0.7458 
+  reduction with LASSO regression
+
+Resulting 3 models
+
+  reduction with BIC backwards R^2 adj gain 0.7458 
+  reduction with LASSO regression
+  add yours and how you wanted to name it
+
+### Conlusion discuss on Sunday
+
+using standard function to analyzie and their interpretation
+
+
+### Appendix
+
+
