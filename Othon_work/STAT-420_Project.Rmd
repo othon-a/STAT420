@@ -1,0 +1,15 @@
+---
+title: "STAT 420 Project - Crop Yield"
+author: "Ziquan Wang and Othon Almanza"
+date: "2025-10-29"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+
+
