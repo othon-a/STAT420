@@ -2,7 +2,6 @@ library(readr)
 library(lmtest)
 library(MASS)
 library(faraway)
-library(ppcor)
 library(tidyverse)
 library(glmnet)
 
@@ -21,19 +20,26 @@ diagnostic_plots = function(model) {
   abline(h = 0, lty = 2, col = "red")
   
   hist(res,
-       breaks = 15,
+       breaks = seq(min(residuals(model)),
+                    max(residuals(model)),
+                    length.out = 16),
+       probability = TRUE,
        main = "Histogram of Residuals",
        xlab = "Residuals")
-  
+  curve(dnorm(x, mean = mean(res), sd = sd(res)),
+        col = "red",
+        add = TRUE)
+
   qqnorm(res,
          main = "Normal Q-Q Plot")
   qqline(res, col = "red")
   
-  boxcox(
+  b = boxcox(
     model,
     lambda = seq(-2, 2, 0.1),
     plotit = TRUE
   )
+  b$x[which.max(b$y)]
 }
 
 diagnostic_tests = function(model) {
@@ -127,6 +133,28 @@ unusual_obs_tests = function(model) {
   ))
 }
 
+actual_vs_predicted = function(model, 
+                               xlab = "Actual",
+                               ylab = "Predicted",
+                               main = "Actual vs Predicted") {
+  mf = model.frame(model)
+  y_actual = model.response(mf)
+  y_pred = fitted(model)
+  
+  par(mfrow = c(1, 1))
+  plot(
+    y_actual, y_pred,
+    xlab = xlab,
+    ylab = ylab,
+    main = main,
+    pch = 19, col = "blue"
+  )
+  abline(0, 1, col = "red", lwd = 2)
+  
+  # Return invisibly
+  invisible(list(y_actual = y_actual, y_pred = y_pred))
+}
+
 
 
 df = read_csv("cleaned_yield_with_gdp_cat_region.csv")
@@ -156,6 +184,7 @@ summary(full_model)
 
 diagnostic_plots(full_model)
 diagnostic_tests(full_model)
+actual_vs_predicted(full_model)
 #summary:
 
 #subregion is controversion since it has divided dataset into very small pieces
@@ -164,22 +193,19 @@ summary(full_model_nore)
 
 diagnostic_plots(full_model_nore)
 diagnostic_tests(full_model_nore)
+actual_vs_predicted(full_model)
 #summary: the boxcox strongly suggest taking 
+
+anova(full_model_nore,full_model) #definitely needs the region information
 
 
 #--------------------Transformation-----------------------------------
 
-y_trans_full_model = lm(yield_hg_ha^0.667 ~ . , data = df_potatoes) #not exactly the same as the book
+y_trans_full_model = lm(yield_hg_ha^0.626 ~ . , data = df_potatoes) #not exactly the same as the book
 summary(y_trans_full_model)
 
 diagnostic_plots(y_trans_full_model)
 diagnostic_tests(y_trans_full_model)
-
-y_trans_full_model_nore = lm(yield_hg_ha^0.5 ~ . -subregion , data = df_potatoes)
-summary(y_trans_full_model_nore)
-
-diagnostic_plots(y_trans_full_model_nore)
-diagnostic_tests(y_trans_full_model_nore)
 
 
 #compare the transformed predictor and response vs non transformed
@@ -200,7 +226,7 @@ plot(x_temp, y_trans, xlab = "temp_c^2", ylab = "sqrt(yield_hg_ha)", main = "Tra
 #looks more linear now after transformation
 
 # best model so far without interaction and with subregion
-y_x_trans_model_potato = lm(yield_hg_ha^0.667 ~ year + rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier +subregion , data = df_potatoes)
+y_x_trans_model_potato = lm(yield_hg_ha^0.626 ~ year + rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier +subregion , data = df_potatoes)
 summary(y_x_trans_model_potato)
 
 diagnostic_plots(y_x_trans_model_potato)
@@ -209,16 +235,6 @@ diagnostic_tests(y_x_trans_model_potato)
 y_x_trans_model_potato_back_bic = step(y_x_trans_model_potato, direction = "backward", k=log(length(resid(y_x_trans_model_potato))))
 # lol the original is already the best.
 
-# best model so far without interaction and without subregion
-
-y_x_trans_model_potato_no_re = lm(yield_hg_ha^0.5 ~ year + rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier , data = df_potatoes)
-summary(y_x_trans_model_potato_no_re)
-
-diagnostic_plots(y_x_trans_model_potato_no_re)
-diagnostic_tests(y_x_trans_model_potato_no_re)
-
-y_x_trans_model_potato_no_re_back_bic = step(y_x_trans_model_potato_no_re, direction = "backward", k=log(length(resid(y_x_trans_model_potato_no_re))))
-#rain is removed
 
 #---------------------Testing interaction--------------
 #
@@ -247,48 +263,6 @@ plot(
 )
 abline(0, 1, col = "red", lwd = 2)
 
-# Actual vs Predicted (original yield scale)
-y_actual_orig = df_potatoes$yield_hg_ha
-y_pred_trans = predict(int_y_x_trans_model_potato_back_bic)
-y_pred_orig = y_pred_trans^(1/0.667)
-
-par(mfrow = c(1, 1))
-plot(
-  y_actual_orig, y_pred_orig,
-  xlab = "Actual yield_hg_ha",
-  ylab = "Predicted yield_hg_ha",
-  main = "Actual vs Predicted (Original Yield Scale)",
-  pch = 19, col = "darkgreen"
-)
-abline(0, 1, col = "red", lwd = 2)
-
-
-# Interactive model without region
-int_y_x_trans_model_potato_nore = lm(yield_hg_ha^0.5 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 , data = df_potatoes)
-
-int_y_x_trans_model_potato_nore_back_bic = step(int_y_x_trans_model_potato_nore, direction = "backward", k=log(length(resid(int_y_x_trans_model_potato_nore))))
-summary(int_y_x_trans_model_potato_nore_back_bic)
-
-diagnostic_plots(int_y_x_trans_model_potato_nore_back_bic)
-diagnostic_tests(int_y_x_trans_model_potato_nore_back_bic)
-
-
-# Actual vs predicted on transformed scale (sqrt(y))
-y_actual = df_potatoes$yield_hg_ha^0.5
-y_pred = predict(int_y_x_trans_model_potato_nore_back_bic)
-
-par(mfrow = c(1, 1))
-plot(  y_actual, y_pred,  xlab = "Actual (yield_hg_ha^0.5)",  ylab = "Predicted (yield_hg_ha^0.5)",  main = "Actual vs Predicted (Transformed Scale: sqrt(yield))",  pch = 19, col = "blue")
-abline(0, 1, col = "red", lwd = 2)
-
-# Convert predicted values back to original scale
-y_actual_orig = df_potatoes$yield_hg_ha
-y_pred_trans = predict(int_y_x_trans_model_potato_nore_back_bic)
-y_pred_orig = (y_pred_trans)^2     # because inverse of sqrt(y) is (sqrt(y))^2
-
-par(mfrow = c(1, 1))
-plot(  y_actual_orig, y_pred_orig,  xlab = "Actual yield_hg_ha",  ylab = "Predicted yield_hg_ha",  main = "Actual vs Predicted (Original Yield Scale)",  pch = 19, col = "darkgreen")
-abline(0, 1, col = "red", lwd = 2)
 
 
 #---------lasso regression to prioritize the explanatory predictors---------
@@ -315,7 +289,7 @@ run_lasso_scaled = function(x, y, family = "gaussian", alpha = 1, seed = 420, do
   coef_1se = coef(cv_fit, s = "lambda.1se")
   
   if (do_plots) {
-    par(mfrow = c(2, 1),mar = c(5, 4, 6, 2))
+    par(mfrow = c(1, 1))
     plot(lasso_fit, label = TRUE, main = "LASSO Coefficient Paths")
     plot(cv_fit, main = "Cross-Validation Curve")
   }
@@ -332,7 +306,7 @@ run_lasso_scaled = function(x, y, family = "gaussian", alpha = 1, seed = 420, do
 y_lasso = (df_potatoes$yield_hg_ha)^0.667
 x_lasso = model.matrix((yield_hg_ha)^0.667 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion, data = df_potatoes)[, -1]
 
-par(mfrow = c(1, 1))
+
 lasso_results = run_lasso_scaled(x_lasso, y_lasso)
 plot(lasso_results$lasso_fit)
 View(lasso_results$coef_df)
@@ -373,3 +347,39 @@ lasso_results_nore$coef_min
 # I((log(pesticides_t))^2):gdp_tierLow     .           
 # I((log(pesticides_t))^2):gdp_tierMiddle  .           
 # I(temp_c^2):gdp_tierLow                  .   
+
+#-----------------------Final model Rundown-------------------------
+
+#sifted through lasso regression
+
+lasso_y_x_trans_model_potato = lm(yield_hg_ha^0.667 ~ year + I(temp_c^2) + rain_mm + I((log(pesticides_t))^2) + gdp_tier +subregion + rain_mm:I((log(pesticides_t))^2)
+                                  +rain_mm:gdp_tier + I((log(pesticides_t))^2):I(temp_c^2), data = df_potatoes)
+
+summary(lasso_y_x_trans_model_potato)
+diagnostic_plots(lasso_y_x_trans_model_potato)
+diagnostic_tests(lasso_y_x_trans_model_potato)
+actual_vs_predicted(lasso_y_x_trans_model_potato)
+
+
+#sifted through BIC Backward
+int_y_x_trans_model_potato = lm(yield_hg_ha^0.667 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion , data = df_potatoes)
+
+int_y_x_trans_model_potato_back_bic = step(int_y_x_trans_model_potato, direction = "backward", k=log(length(resid(int_y_x_trans_model_potato))))
+summary(int_y_x_trans_model_potato_back_bic)
+
+diagnostic_plots(int_y_x_trans_model_potato_back_bic)
+diagnostic_tests(int_y_x_trans_model_potato_back_bic)
+actual_vs_predicted(int_y_x_trans_model_potato)
+
+# centered 
+df_potat = subset(df, crop == "Potatoes")
+df_potat$rain_mm_cent = df_potat$rain_mm - mean(df_potat$rain_mm)
+df_potat$temp_c_cent = df_potat$temp_c - mean(df_potat$temp_c)
+df_potat$year_cent = df_potat$year - mean(df_potat$year)
+
+quad_model = lm(yield_hg_ha^0.667 ~ rain_mm_cent * temp_c_cent + I(rain_mm_cent ^ 2) + I(temp_c_cent ^ 2) + year_cent + pesticides_t + gdp_tier + subregion, data = df_potat)
+summary(quad_model)
+diagnostic_plots(quad_model)
+diagnostic_tests(quad_model)
+actual_vs_predicted(quad_model)
+
