@@ -2,7 +2,10 @@
 title: "STAT 420 Project - Crop Yield"
 author: "Ziquan Wang and Othon Almanza"
 date: "2025-12-08"
-output: pdf_document
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE, message=FALSE, warning=FALSE}
@@ -171,7 +174,7 @@ par(mfrow = c(1, 1))
 
 
 
-# Full Linear Model
+### Full Linear Model
 
 After exploring the cleaned data, we created a full additive model using yield as a function of the remaining predictors. This achieved a baseline adjusted r-squared of 0.701. The summary output is shown below.
 
@@ -181,17 +184,17 @@ summary(add_model)
 ```
 With an r-squared of 0.7046, our baseline model shows a strong correlation between our predictors and the yield response. This coefficient of determination indicates that 70.46% of the observed variation in yield can be explained by the full additive linear model.
 
-We can also see patterns emerge from the model's coefficients. First, we observe that year is positively correlated with crop yield. When all other predictors are equal, each additional year results in a yield increase of 2,300 hg/ha. We see that rain has a small but positive correlation with crop yield, with an increase of 7.9 hg/ha for every additional millimeter of rainfall. Pesticides are also correlated with increased crop yield, with an increase in 0.6 hg/ha for each additional tonne of pesticides. Temperature reverses these trends, with yield decreases of 2,200 hg/ha for every increase in degrees Celsius, illustrating potatoe's suitability for cooler climates. The GDP tiers reinforce what we had seen during the data exploration process: The base factor level of high-GDP corresponds with the highest corp yields. The intercept is reduced for middle-GDP observations and reduced even further for low-GDP observations. When we look at the subregion factor, we see that are small but statistically significant variations among the different subregions. The notable exception to this is Western Europe, which has a high p-value of 0.269. This may be due to the inclusion of an Eastern Europe subregion, which likely shares many commonalities with Western Europe regarding climate conditions, economic output, and farming practices.
+We can also see patterns emerge from the model's coefficients. First, we observe that year is positively correlated with crop yield. When all other predictors are equal, each additional year results in a yield increase of 2,300 hg/ha. We see that rain has a small but positive correlation with crop yield, with an increase of 7.9 hg/ha for every additional millimeter of rainfall. Pesticides are also correlated with increased crop yield, with an increase in 0.6 hg/ha for each additional tonne of pesticides. Temperature reverses these trends, with yield decreases of 2,200 hg/ha for every increase in degrees Celsius, illustrating potato's suitability for cooler climates. The GDP tiers reinforce what we had seen during the data exploration process: The base factor level of high-GDP corresponds with the highest corp yields. The intercept is reduced for middle-GDP observations and reduced even further for low-GDP observations. When we look at the subregion factor, we see that are small but statistically significant variations among the different subregions. The notable exception to this is Western Europe, which has a high p-value of 0.269. This may be due to the inclusion of an Eastern Europe subregion, which likely shares many commonalities with Western Europe regarding climate conditions, economic output, and farming practices. This high p-value indicates the statistical insignificance on the potato yield considering the difference among these two regions as the variable.
 
 <!-- Add diagnostic visualizations -->
 
 We can further validate the full model using leave-one-Out cross-validation (LOOCV). Using hat values to conduct LOOCV, we attain a root mean square error (RMSE) of 73,268.77 hg/ha. This is only slightly larger than the RMSE of the full additive model, 73,154.80 hg/ha, indicating a favorable result. The LOOCV RMSE is necessarily larger than the model's RMSE, but in this case only slightly so.
 
-# Other Methods
+### Other Methods
 
 We also created a null model that omitted the subregions predictor to evaluate whether it was needed in our final model. This model resulted in a significantly lower adjusted r-squared of 0.464. An ANOVA test confirmed this trend. Using any reasonable significance level resulted in an outcome that rejects the null hypothesis in favor of including subregions. Including subregions was thus taken as a good compromise to build a stronger model without needing to classify crop yields at the country level.
 
-Having identified pesticides as a predictor that might benefit from a transformation, we first observe that log transforming pesticides seems to improve its relationship with yield size. The relationship is further improved after squaring the log transformation.
+Having identified pesticides as a predictor that might benefit from a transformation, we first observe that log transforming pesticides seems to improve its linear relationship with yield size. We can see the twice transformed pesticides predictor scattered more evenly around the red line after squaring the log transformation.
 
 ```{r echo=FALSE}
 par(mfrow = c(2, 2))
@@ -218,11 +221,11 @@ abline(plot3, col = "red")
 par(mfrow = c(1, 1))
 ```
 
-A quadratic transformation was applied to temperature (see appendix).
+A quadratic transformation was applied to temperature. The result is less significant than the transformation of pesticides predictor. However, the transformed temperature predictor scattered evenly around the red line as well (see appendix). 
 
-We created an additive model that left subregion as a predictor and also incorporated predictor-level transformations for pesticides and temperature. We attempted a backward BIC search to see if the model could be reduced from here, but perhaps unsurprisingly, no predictors were dropped.
+We created an additive model included all predictors and also incorporated predictor-level transformations for pesticides and temperature. We chose to keep only the transformed predictors in the model fitting because the clearly nonlinear relationship between yield and these transformed predictors. We attempted a backward BIC search to see if the model could be reduced from here, but perhaps unsurprisingly, no predictors were dropped. The Adjusted R-squared improved to 0.7457 against 0.701 before transformation. This indicated the predictor transformation helped improving the model. The model returns an RMSE of 50,668.60 hg/ha and a LOOCV-RMSE of 51,263.41 hg/ha, an significant improvement from the full additive model.
 
-Having chosen the predictor transformations to incorporate, we then created a model that created two-way interactions among rain, pesticides, temperature, and GDP. Year and region were left in the model but not considered for two-way interactions. This created a large model appropriate for BIC backward search. The search was successful, and the model was reduced to a manageable size. The model returns an RMSE of 48,705.68 hg/ha and a LOOCV-RMSE of 49,403.77 hg/ha, an improvement from the full additive model. Additionally, variance inflation factors (VIF's) do not show problematic covariance within the model.
+Having chosen the predictor transformations to incorporate, we then created a model that created two-way interactions among rain, pesticides, temperature, and GDP. Year and region were kept in the model but not considered for two-way interactions because the subregion could explode the interactive term and make it hard to interpret and it is unlikely Year predictor interact with other predictors observing its relationship with other predictors the plot generated by Pairs() function. This created a large model appropriate for BIC backward search. The search was successful, and the model was reduced to a manageable size. The Adjusted R-squared improved to 0.7643 against 0.7457 before adding interaction terms. The model returns an RMSE of 48,705.68 hg/ha and a LOOCV-RMSE of 49,403.77 hg/ha, an improvement from the full additive transformed model. Additionally, variance inflation factors (VIF's) do not show problematic covariance within the model. Interestingly, some 
 
 Finally, we used boxcox() to find an appropriate Box-Cox transformation on the response. A lambda value of 0.707 was identified and used.
 
@@ -254,15 +257,25 @@ Finally, we used boxcox() to find an appropriate Box-Cox transformation on the r
 <!--   reduction with LASSO regression -->
 <!--   add yours and how you wanted to name it -->
 
-### Conlusion
+## Conlusion
 
 Our final model achieves an r-squared of 0.7477, accounting for a larger portion of the response's observed variation compared to the full additive model's r-squared of 0.7046. We see improvements in other diagnostics as well: The model's RMSE is improved from 73,154.80 to 48,705.68. It also shows a favorable LOOCV-RMSE of 49,403.77. Additionally, normality is considerably increased in the final model from a Shapiro-Wilk normality p-value of 0.003364 to a p-value of 0.0209. We believe the updated model is a stronger model prediction, as well as a sounder model for explanation.
 
 <!-- using standard function to analyzie and their interpretation -->
+## Future Actions
+Regarding the missing 2003 data, we could either find these missing data or interpolate the missing points. Going through these model script and see if it improve the model.
 
 
-### Appendix
 
+## Appendix
+
+***Additional Data Source***
+
+GDP Data https://data.worldbank.org/indicator/NY.GDP.PCAP.CD
+
+
+
+***Data Exploration using Covariance and Pairs() function***
 ```{r}
 df_potatoes_num = df_potatoes%>%        
   mutate(
@@ -277,6 +290,7 @@ round(cor(df_potatoes_num), 2)
 pairs(df_potatoes_num)
 ```
 
+***Fitting and diagnosing the full model***
 ```{r}
 add_model = lm(yield_hg_ha ~ ., data = df_potatoes)
 diagnostic_plots(add_model)
@@ -290,11 +304,13 @@ diagnostic_tests(add_model)
 loocv(add_model)
 ```
 
+***Testing subregion significance***
 ```{r}
 add_nosubreg = lm(yield_hg_ha ~ . - subregion, data = df_potatoes)
 anova(add_nosubreg, add_model)
 ```
 
+***Temperature Predictor transformation***
 ```{r}
 par(mfrow = c(2, 2))
 plot(df_potatoes$yield_hg_ha ~ df_potatoes$temp_c,
@@ -313,16 +329,25 @@ abline(temp2, col = "red")
 par(mfrow = c(1, 1))
 ```
 
+***Fit the model with all transformed predictors and BIC model reduction ***
 ```{r}
-tran_model = lm(yield_hg_ha ~ year + rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier +subregion, data = df_potatoes)
+tran_model = lm(yield_hg_ha ~ year + rain_mm + I((log(pesticides_t))^2) 
+                + I(temp_c^2) + gdp_tier +subregion, data = df_potatoes)
 
-step(tran_model, direction = "backward", k=log(length(resid(tran_model))), trace = 0)
+summary(step(tran_model, direction = "backward", k=log(length(resid(tran_model))), trace = 0))
 ```
 
 ```{r}
-int_model = lm(yield_hg_ha ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion , data = df_potatoes)
+loocv(tran_model)
+```
 
-(bic_model = step(int_model, direction = "backward", k=log(length(resid(int_model))), trace = 0))
+***Fit the model with interactive transformed predictors and BIC model reduction ***
+```{r}
+int_model = lm(yield_hg_ha ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2)
+                                     + gdp_tier)^2 +subregion , data = df_potatoes)
+
+bic_model = step(int_model, direction = "backward", k=log(length(resid(int_model))), trace = 0)
+summary(bic_model)
 
 car::vif(bic_model)
 ```
