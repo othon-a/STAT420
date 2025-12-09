@@ -1,7 +1,7 @@
 ---
 title: "STAT 420 Project - Crop Yield"
 author: "Ziquan Wang and Othon Almanza"
-date: "2025-10-29"
+date: "2025-12-08"
 output: pdf_document
 ---
 
@@ -39,8 +39,10 @@ diagnostic_plots = function(model) {
   
   hist(res,
        breaks = 15,
+       probability = TRUE,
        main = "Histogram of Residuals",
        xlab = "Residuals")
+  curve(dnorm(x, mean(res), sd(res)), add = TRUE, col = "red")
   
   qqnorm(res,
          main = "Normal Q-Q Plot")

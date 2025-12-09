@@ -37,6 +37,42 @@ diagnostic_tests = function(model) {
   cat("\nInterpretation: LOOCV-RMSE significantly larger than RMSE may indicate under or over-fitting\n\n")
 }
 
+diagnostic_plots = function(model) {
+  
+  # 2x2 layout
+  par(mfrow = c(2, 2))
+  
+  fit = fitted(model)
+  res = residuals(model)
+  
+  plot(fit, res,
+       xlab = "Fitted values",
+       ylab = "Residuals",
+       main = "Fitted vs Residuals")
+  abline(h = 0, lty = 2, col = "red")
+  
+  hist(res,
+       breaks = 15,
+       probability = TRUE,
+       main = "Histogram of Residuals",
+       xlab = "Residuals")
+  curve(dnorm(x, mean(res), sd(res)), add = TRUE, col = "red")
+  
+  qqnorm(res,
+         main = "Normal Q-Q Plot")
+  qqline(res, col = "red")
+  
+  boxcox(
+    model,
+    lambda = seq(-2, 2, 0.1),
+    plotit = TRUE
+  )
+}
+
+diagnostic_plots(add_model)
+
+?curve()
+
 # subset potatoes and center predictors
 df = read_csv("cleaned_yield_with_gdp_cat.csv")
 df_potatoes = subset(df, crop == "Potatoes")
