@@ -54,17 +54,17 @@ diagnostic_tests = function(model) {
   shapiro = shapiro.test(res)
   
   vif_values = car::vif(model)
-  cat("=== Breusch-Pagan Test (Homoscedasticity) ===\n")
-  print(bp)
-  cat("\nInterpretation: p-value < 0.05 suggests heteroscedasticity.\n\n")
-  
-  cat("=== Shapiro-Wilk Test (Normality of Residuals) ===\n")
-  print(shapiro)
-  cat("\nInterpretation: p-value < 0.05 suggests non-normal residuals.\n\n")
-  
-  cat("=== Variance Inflation Factor (VIF) ===\n")
-  print(vif_values)
-  cat("\nInterpretation: VIF > 5 suggests moderate collinearity; VIF > 10 suggests high multicollinearity.\n\n")
+  # cat("=== Breusch-Pagan Test (Homoscedasticity) ===\n")
+  # print(bp)
+  # cat("\nInterpretation: p-value < 0.05 suggests heteroscedasticity.\n\n")
+  # 
+  # cat("=== Shapiro-Wilk Test (Normality of Residuals) ===\n")
+  # print(shapiro)
+  # cat("\nInterpretation: p-value < 0.05 suggests non-normal residuals.\n\n")
+  # 
+  # cat("=== Variance Inflation Factor (VIF) ===\n")
+  # print(vif_values)
+  # cat("\nInterpretation: VIF > 5 suggests moderate collinearity; VIF > 10 suggests high multicollinearity.\n\n")
   
   return(list(
     bp_test = bp,
@@ -304,16 +304,18 @@ run_lasso_scaled = function(x, y, family = "gaussian", alpha = 1, seed = 420, do
 }
 
 y_lasso = (df_potatoes$yield_hg_ha)^0.667
-x_lasso = model.matrix((yield_hg_ha)^0.667 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion, data = df_potatoes)[, -1]
+x_lasso = model.matrix((yield_hg_ha)^0.667 ~ year + (rain_mm + temp_c +log(pesticides_t) + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion, data = df_potatoes)[, -1]
 
 
 lasso_results = run_lasso_scaled(x_lasso, y_lasso)
 plot(lasso_results$lasso_fit)
-View(lasso_results$coef_df)
 
-lasso_results$coef_1se
-lasso_results$coef_min
 lasso_results$lasso_fit
+
+
+coef_32para = coef(lasso_results$cv_fit, s = 0.02995)
+coef_32para 
+
 
 #taken out
 # rain_mm:I(temp_c^2)                      .  
@@ -321,8 +323,8 @@ lasso_results$lasso_fit
 # I(temp_c^2):gdp_tierLow                  .  
 
 
-lasso_y_x_trans_model_potato = lm(yield_hg_ha^0.667 ~ year + rain_mm + I((log(pesticides_t))^2)    + gdp_tier +subregion + rain_mm:I((log(pesticides_t))^2)
-                                +rain_mm:gdp_tier + I((log(pesticides_t))^2):I(temp_c^2), data = df_potatoes)
+lasso_y_x_trans_model_potato = lm(yield_hg_ha^0.667 ~ year + rain_mm + I((log(pesticides_t))^2) + gdp_tier +subregion + rain_mm:I((log(pesticides_t))^2)
+                                 + I((log(pesticides_t))^2):I(temp_c^2), data = df_potatoes)
 
 summary(lasso_y_x_trans_model_potato)
 diagnostic_plots(lasso_y_x_trans_model_potato)
