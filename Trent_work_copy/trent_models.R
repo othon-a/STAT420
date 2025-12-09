@@ -21,6 +21,7 @@ diagnostic_plots = function(model) {
   abline(h = 0, lty = 2, col = "red")
   
   hist(res,
+       breaks = 15,
        main = "Histogram of Residuals",
        xlab = "Residuals")
   
@@ -139,7 +140,7 @@ df_potatoes = df_potatoes %>%
 #had to convert categorical to numeric to use pairs and cor
 df_potatoes_num = df_potatoes%>%        
   mutate(
-    gdp_tier = factor(gdp_tier, levels = c("Low", "Middle", "High")),     
+    gdp_tier = as.numeric(factor(gdp_tier, levels = c("Low", "Middle", "High"))),     
     subregion = as.numeric(factor(subregion))    
   )
 
@@ -168,7 +169,7 @@ diagnostic_tests(full_model_nore)
 
 #--------------------Transformation-----------------------------------
 
-y_trans_full_model = lm(yield_hg_ha^0.6 ~ . , data = df_potatoes)
+y_trans_full_model = lm(yield_hg_ha^0.667 ~ . , data = df_potatoes) #not exactly the same as the book
 summary(y_trans_full_model)
 
 diagnostic_plots(y_trans_full_model)
@@ -199,7 +200,7 @@ plot(x_temp, y_trans, xlab = "temp_c^2", ylab = "sqrt(yield_hg_ha)", main = "Tra
 #looks more linear now after transformation
 
 # best model so far without interaction and with subregion
-y_x_trans_model_potato = lm(yield_hg_ha ~ year + rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier +subregion, data = df_potatoes)
+y_x_trans_model_potato = lm(yield_hg_ha^0.667 ~ year + rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier +subregion , data = df_potatoes)
 summary(y_x_trans_model_potato)
 
 diagnostic_plots(y_x_trans_model_potato)
@@ -223,7 +224,7 @@ y_x_trans_model_potato_no_re_back_bic = step(y_x_trans_model_potato_no_re, direc
 #
 
 #removed year compare to original
-int_y_x_trans_model_potato = lm(yield_hg_ha^.7 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion , data = df_potatoes)
+int_y_x_trans_model_potato = lm(yield_hg_ha^0.667 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion , data = df_potatoes)
 
 int_y_x_trans_model_potato_back_bic = step(int_y_x_trans_model_potato, direction = "backward", k=log(length(resid(int_y_x_trans_model_potato))))
 summary(int_y_x_trans_model_potato_back_bic)
@@ -233,7 +234,7 @@ diagnostic_tests(int_y_x_trans_model_potato_back_bic)
 #remove year because it inflated with log^2 pesticide term
 
 # Actual vs Predicted (transformed scale)
-y_actual = df_potatoes$yield_hg_ha^.7
+y_actual = df_potatoes$yield_hg_ha^0.667
 y_pred = predict(int_y_x_trans_model_potato_back_bic)
 
 par(mfrow = c(1, 1))
@@ -242,13 +243,14 @@ plot(
   xlab = "Actual (yield_hg_ha^0.6)",
   ylab = "Predicted (yield_hg_ha^0.6)",
   main = "Actual vs Predicted (Transformed Scale)",
+  pch = 19, col = "blue"
 )
 abline(0, 1, col = "red", lwd = 2)
 
 # Actual vs Predicted (original yield scale)
 y_actual_orig = df_potatoes$yield_hg_ha
 y_pred_trans = predict(int_y_x_trans_model_potato_back_bic)
-y_pred_orig = y_pred_trans^(1/0.6)
+y_pred_orig = y_pred_trans^(1/0.667)
 
 par(mfrow = c(1, 1))
 plot(
@@ -295,129 +297,79 @@ abline(0, 1, col = "red", lwd = 2)
 # LASSO with region variables
 # ============================
 
-y_lasso = (df_potatoes$yield_hg_ha)^0.6
-x_lasso = model.matrix((yield_hg_ha)^0.6 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion, data = df_potatoes)[, -1]
-
-x_lasso_scaled = scale(x_lasso)
-
-set.seed(420)
-lasso_fit = glmnet(  x = x_lasso_scaled,
-                     y = y_lasso,
-                     family = "gaussian",
-                     standardize = FALSE,
-                     alpha = 1      # LASSO
-                     )
-
-plot(lasso_fit,label = TRUE)
-
-coef_paths = coef(lasso_fit)
-coef_df = as.data.frame(as.matrix(coef_paths))
-coef_df$predictor = rownames(coef_df)
-coef_df = coef_df %>% select(predictor, everything())
-
-cv_fit = cv.glmnet(
-  x = x_lasso_scaled,
-  y = y_lasso,
-  family = "gaussian",
-  alpha = 1,      # LASSO
-  standardize = FALSE 
-)
-plot(cv_fit)
-
-coef_min = coef(cv_fit, s = "lambda.min")
-coef_min
-
-coef_1se = coef(cv_fit, s = "lambda.1se")
-coef_1se
-
-rank_lasso_importance = function(cv_fit, s = "lambda.min") {
-  coefs = coef(cv_fit, s = s)
-  df = data.frame(
-    predictor = rownames(coefs),
-    coefficient = as.numeric(coefs)
-  )
-  df = df %>%
-    filter(predictor != "(Intercept)") %>% 
-    mutate(abs_coef = abs(coefficient)) %>%
-    arrange(desc(abs_coef))
+run_lasso_scaled = function(x, y, family = "gaussian", alpha = 1, seed = 420, do_plots = TRUE) {
   
-  return(df)
+  x_scaled = scale(x)
+  y_scaled = scale(y)
+
+  set.seed(seed)
+  lasso_fit = glmnet(x = x_scaled, y = y_scaled, family = family, alpha = alpha, standardize = FALSE)
+  
+  coef_paths = coef(lasso_fit)
+  coef_df = as.data.frame(as.matrix(coef_paths))
+  
+  set.seed(seed)
+  cv_fit = cv.glmnet(x = x_scaled, y = y_scaled, family = family, alpha = alpha, standardize = FALSE )
+  
+  coef_min = coef(cv_fit, s = "lambda.min")
+  coef_1se = coef(cv_fit, s = "lambda.1se")
+  
+  if (do_plots) {
+    par(mfrow = c(2, 1),mar = c(5, 4, 6, 2))
+    plot(lasso_fit, label = TRUE, main = "LASSO Coefficient Paths")
+    plot(cv_fit, main = "Cross-Validation Curve")
+  }
+  
+  return(list(
+    lasso_fit = lasso_fit,
+    cv_fit = cv_fit,
+    coef_df = coef_df,
+    coef_min = coef_min,
+    coef_1se = coef_1se
+  ))
 }
 
-importance = rank_lasso_importance(cv_fit, s = "lambda.1se")
-importance
+y_lasso = (df_potatoes$yield_hg_ha)^0.667
+x_lasso = model.matrix((yield_hg_ha)^0.667 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2 +subregion, data = df_potatoes)[, -1]
+
+par(mfrow = c(1, 1))
+lasso_results = run_lasso_scaled(x_lasso, y_lasso)
+plot(lasso_results$lasso_fit)
+View(lasso_results$coef_df)
+
+lasso_results$coef_1se
+lasso_results$coef_min
+lasso_results$lasso_fit
+
+#taken out
+# rain_mm:I(temp_c^2)                      .  
+# I((log(pesticides_t))^2):gdp_tierMiddle  .           
+# I(temp_c^2):gdp_tierLow                  .  
 
 
+lasso_y_x_trans_model_potato = lm(yield_hg_ha^0.667 ~ year + rain_mm + I((log(pesticides_t))^2)    + gdp_tier +subregion + rain_mm:I((log(pesticides_t))^2)
+                                +rain_mm:gdp_tier + I((log(pesticides_t))^2):I(temp_c^2), data = df_potatoes)
+
+summary(lasso_y_x_trans_model_potato)
+diagnostic_plots(lasso_y_x_trans_model_potato)
+diagnostic_tests(lasso_y_x_trans_model_potato)
 
 # ============================
 # LASSO without region variables
 # ============================
-
-
 y_lasso_nore = (df_potatoes$yield_hg_ha)^0.5
-
-
 x_lasso_nore = model.matrix(
   (yield_hg_ha)^0.5 ~ year + (rain_mm + I((log(pesticides_t))^2) + I(temp_c^2) + gdp_tier)^2,
   data = df_potatoes
-)[, -1]   # remove intercept column
+)[, -1]
 
-x_lasso_scaled_nore = scale(x_lasso_nore)
+lasso_results_nore = run_lasso_scaled(x_lasso_nore, y_lasso_nore)
 
-set.seed(420)
-lasso_fit_nore = glmnet(
-  x = x_lasso_scaled_nore,
-  y = y_lasso_nore,
-  family = "gaussian",
-  standardize = FALSE,
-  alpha = 1     # LASSO
-)
+lasso_results_nore$coef_1se
+lasso_results_nore$coef_min
 
-plot(lasso_fit_nore, label = TRUE)
-
-
-coef_paths_nore = coef(lasso_fit_nore)
-coef_df_nore = as.data.frame(as.matrix(coef_paths_nore))
-coef_df_nore$predictor = rownames(coef_df_nore)
-coef_df_nore = coef_df_nore %>% select(predictor, everything())
-View(coef_df_nore)
-
-
-set.seed(420)
-cv_fit_nore = cv.glmnet(
-  x = x_lasso_scaled_nore,
-  y = y_lasso_nore,
-  family = "gaussian",
-  standardize = FALSE,
-  alpha = 1
-)
-
-
-plot(cv_fit_nore)
-
-
-coef_min_nore = coef(cv_fit_nore, s = "lambda.min")
-coef_min_nore
-
-coef_1se_nore = coef(cv_fit_nore, s = "lambda.1se")
-coef_1se_nore
-
-
-rank_lasso_importance = function(cv_fit, s = "lambda.min") {
-  coefs = coef(cv_fit, s = s)
-  df = data.frame(
-    predictor = rownames(coefs),
-    coefficient = as.numeric(coefs)
-  )
-  df = df %>%
-    filter(predictor != "(Intercept)") %>% 
-    mutate(abs_coef = abs(coefficient)) %>%
-    arrange(desc(abs_coef))
-  
-  return(df)
-}
-
-
-importance_nore = rank_lasso_importance(cv_fit_nore, s = "lambda.1se")
-importance_nore
-
+#taken out
+# rain_mm:I(temp_c^2)                      .  
+# I((log(pesticides_t))^2):gdp_tierLow     .           
+# I((log(pesticides_t))^2):gdp_tierMiddle  .           
+# I(temp_c^2):gdp_tierLow                  .   
