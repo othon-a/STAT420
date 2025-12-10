@@ -279,7 +279,7 @@ Overall, We believe the updated model is a stronger model for prediction, as wel
 
 Regarding the missing 2003 data, we could either find these missing data or interpolate the missing points to see how it affects the model.
 
-Through research, alternative LASSO regression algorithms were identified that better identify the significance of predictors. Though the alternatives were out the scope of this course, we could try alternatives in the future.
+Through research, alternative LASSO regression algorithms were identified that better identify the significance of predictors. Though the alternatives were out the scope of this course, they are worth considering in the future.
 
 ## Appendix
 
